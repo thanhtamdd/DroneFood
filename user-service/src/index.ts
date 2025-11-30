@@ -32,10 +32,55 @@ async function connectWithRetry(pool: sql.ConnectionPool, retries = 5) {
     throw new Error("❌ Could not connect to SQL Server after retries");
 }
 
+// Lấy danh sách users
 app.get("/users", async (req: Request, res: Response) => {
     try {
         const result = await pool.request().query("SELECT TOP 10 * FROM Users");
         res.json(result.recordset);
+    } catch (err) {
+        res.status(500).json({ error: err });
+    }
+});
+
+// Thêm user mới
+app.post("/users", async (req: Request, res: Response) => {
+    const { name, email } = req.body;
+    try {
+        const result = await pool.request()
+            .input("name", sql.NVarChar, name)
+            .input("email", sql.NVarChar, email)
+            .query("INSERT INTO Users (Name, Email) VALUES (@name, @email); SELECT SCOPE_IDENTITY() AS UserId;");
+        const userId = result.recordset[0].UserId;
+        res.json({ userId, name, email });
+    } catch (err) {
+        res.status(500).json({ error: err });
+    }
+});
+
+// Sửa thông tin user
+app.put("/users/:id", async (req: Request, res: Response) => {
+    const userId = req.params.id;
+    const { name, email } = req.body;
+    try {
+        await pool.request()
+            .input("id", sql.Int, userId)
+            .input("name", sql.NVarChar, name)
+            .input("email", sql.NVarChar, email)
+            .query("UPDATE Users SET Name = @name, Email = @email WHERE UserId = @id");
+        res.json({ userId, name, email });
+    } catch (err) {
+        res.status(500).json({ error: err });
+    }
+});
+
+// Xóa user
+app.delete("/users/:id", async (req: Request, res: Response) => {
+    const userId = req.params.id;
+    try {
+        await pool.request()
+            .input("id", sql.Int, userId)
+            .query("DELETE FROM Users WHERE UserId = @id");
+        res.json({ message: `User ${userId} deleted.` });
     } catch (err) {
         res.status(500).json({ error: err });
     }
