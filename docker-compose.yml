@@ -1,0 +1,138 @@
+version: '3.8'
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: dronefood-sql
+    environment:
+      SA_PASSWORD: "DroneFood1"
+      ACCEPT_EULA: "Y"
+    ports:
+      - "1446:1433"
+    networks:
+      - dronefood-net
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: dronefood-rabbit
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - dronefood-net
+    restart: unless-stopped
+
+  user-service:
+    build: ./user-service
+    environment:
+      PORT: 3001
+      DB_SERVER: sqlserver
+      DB_USER: sa
+      DB_PASSWORD: DroneFood1
+      DB_NAME: DroneFoodDB
+      RABBITMQ_URL: amqp://rabbitmq
+    ports:
+      - "3001:3001"
+    depends_on:
+      - sqlserver
+      - rabbitmq
+    networks:
+      - dronefood-net
+    restart: unless-stopped
+
+  restaurant-service:
+    build: ./restaurant-service
+    environment:
+      PORT: 3002
+      DB_SERVER: sqlserver
+      DB_USER: sa
+      DB_PASSWORD: DroneFood1
+      DB_NAME: DroneFoodDB
+      RABBITMQ_URL: amqp://rabbitmq
+    ports:
+      - "3002:3002"
+    depends_on:
+      - sqlserver
+      - rabbitmq
+    networks:
+      - dronefood-net
+    restart: unless-stopped
+
+  order-service:
+    build: ./order-service
+    environment:
+      PORT: 3003
+      DB_SERVER: sqlserver
+      DB_USER: sa
+      DB_PASSWORD: DroneFood1
+      DB_NAME: DroneFoodDB
+      RABBITMQ_URL: amqp://rabbitmq
+    ports:
+      - "3003:3003"
+    depends_on:
+      - sqlserver
+      - rabbitmq
+    networks:
+      - dronefood-net
+    restart: unless-stopped
+
+  payment-service:
+    build: ./payment-service
+    environment:
+      PORT: 3004
+      DB_SERVER: sqlserver
+      DB_USER: sa
+      DB_PASSWORD: DroneFood1
+      DB_NAME: DroneFoodDB
+      RABBITMQ_URL: amqp://rabbitmq
+    ports:
+      - "3004:3004"
+    depends_on:
+      - sqlserver
+      - rabbitmq
+    networks:
+      - dronefood-net
+    restart: unless-stopped
+
+  drone-service:
+    build: ./drone-service
+    environment:
+      PORT: 3005
+      DB_SERVER: sqlserver
+      DB_USER: sa
+      DB_PASSWORD: DroneFood1
+      DB_NAME: DroneFoodDB
+      RABBITMQ_URL: amqp://rabbitmq
+    ports:
+      - "3005:3005"
+    depends_on:
+      - sqlserver
+      - rabbitmq
+    networks:
+      - dronefood-net
+    restart: unless-stopped
+
+  dispatch-service:
+    build: ./dispatch-service
+    environment:
+      RABBITMQ_URL: amqp://rabbitmq
+    depends_on:
+      - rabbitmq
+    networks:
+      - dronefood-net
+    restart: unless-stopped
+
+  notification-service:
+    build: ./notification-service
+    environment:
+      RABBITMQ_URL: amqp://rabbitmq
+    depends_on:
+      - rabbitmq
+    networks:
+      - dronefood-net
+    restart: unless-stopped
+
+networks:
+  dronefood-net:
+    driver: bridge
