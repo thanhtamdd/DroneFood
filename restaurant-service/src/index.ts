@@ -13,7 +13,7 @@ const pool = new sql.ConnectionPool({
     user: process.env.DB_USER!,
     password: process.env.DB_PASSWORD!,
     server: process.env.DB_SERVER!,
-    port: 1433,
+    port: parseInt(process.env.DB_PORT!) || 1433,
     database: process.env.DB_NAME!,
     options: { encrypt: false, trustServerCertificate: true },
 });
@@ -33,8 +33,6 @@ async function connectWithRetry(pool: sql.ConnectionPool, retries = 5) {
 }
 
 // ================== Restaurants CRUD ==================
-
-// Lấy danh sách nhà hàng
 app.get("/restaurants", async (req: Request, res: Response) => {
     try {
         const result = await pool.request().query("SELECT TOP 10 * FROM Restaurants");
@@ -44,108 +42,119 @@ app.get("/restaurants", async (req: Request, res: Response) => {
     }
 });
 
-// Thêm nhà hàng mới
 app.post("/restaurants", async (req: Request, res: Response) => {
-    const { name, address } = req.body;
+    const { name, address, phone } = req.body;
     try {
         const result = await pool.request()
             .input("name", sql.NVarChar, name)
             .input("address", sql.NVarChar, address)
-            .query("INSERT INTO Restaurants (Name, Address) VALUES (@name, @address); SELECT SCOPE_IDENTITY() AS RestaurantId;");
-        const restaurantId = result.recordset[0].RestaurantId;
-        res.json({ restaurantId, name, address });
+            .input("phone", sql.NVarChar, phone)
+            .query(`
+                INSERT INTO Restaurants (Name, Address, Phone) 
+                VALUES (@name, @address, @phone); 
+                SELECT SCOPE_IDENTITY() AS Id;
+            `);
+        const restaurantId = result.recordset[0].Id;
+        res.json({ restaurantId, name, address, phone });
     } catch (err) {
         res.status(500).json({ error: err });
     }
 });
 
-// Sửa nhà hàng
 app.put("/restaurants/:id", async (req: Request, res: Response) => {
     const restaurantId = req.params.id;
-    const { name, address } = req.body;
+    const { name, address, phone } = req.body;
     try {
         await pool.request()
             .input("id", sql.Int, restaurantId)
             .input("name", sql.NVarChar, name)
             .input("address", sql.NVarChar, address)
-            .query("UPDATE Restaurants SET Name = @name, Address = @address WHERE RestaurantId = @id");
-        res.json({ restaurantId, name, address });
+            .input("phone", sql.NVarChar, phone)
+            .query(`
+                UPDATE Restaurants SET Name = @name, Address = @address, Phone = @phone 
+                WHERE Id = @id
+            `);
+        res.json({ restaurantId, name, address, phone });
     } catch (err) {
         res.status(500).json({ error: err });
     }
 });
 
-// Xóa nhà hàng
 app.delete("/restaurants/:id", async (req: Request, res: Response) => {
     const restaurantId = req.params.id;
     try {
         await pool.request()
             .input("id", sql.Int, restaurantId)
-            .query("DELETE FROM Restaurants WHERE RestaurantId = @id");
+            .query("DELETE FROM Restaurants WHERE Id = @id");
         res.json({ message: `Restaurant ${restaurantId} deleted.` });
     } catch (err) {
         res.status(500).json({ error: err });
     }
 });
 
-// ================== MenuItems CRUD ==================
-
-// Lấy menu theo restaurantId
-app.get("/restaurants/:id/menu", async (req: Request, res: Response) => {
+// ================== Dishes CRUD ==================
+app.get("/restaurants/:id/dishes", async (req: Request, res: Response) => {
     const restaurantId = req.params.id;
     try {
         const result = await pool.request()
-            .input("id", sql.Int, restaurantId)
-            .query("SELECT * FROM MenuItems WHERE RestaurantId = @id");
+            .input("restaurantId", sql.Int, restaurantId)
+            .query("SELECT * FROM Dishes WHERE RestaurantId = @restaurantId");
         res.json(result.recordset);
     } catch (err) {
         res.status(500).json({ error: err });
     }
 });
 
-// Thêm món mới vào menu
-app.post("/restaurants/:id/menu", async (req: Request, res: Response) => {
+app.post("/restaurants/:id/dishes", async (req: Request, res: Response) => {
     const restaurantId = req.params.id;
-    const { name, price } = req.body;
+    const { name, description, price } = req.body;
     try {
         const result = await pool.request()
             .input("restaurantId", sql.Int, restaurantId)
             .input("name", sql.NVarChar, name)
+            .input("description", sql.NVarChar, description)
             .input("price", sql.Decimal(10, 2), price)
-            .query("INSERT INTO MenuItems (RestaurantId, Name, Price) VALUES (@restaurantId, @name, @price); SELECT SCOPE_IDENTITY() AS MenuItemId;");
-        const menuItemId = result.recordset[0].MenuItemId;
-        res.json({ menuItemId, restaurantId, name, price });
+            .query(`
+                INSERT INTO Dishes (RestaurantId, Name, Description, Price) 
+                VALUES (@restaurantId, @name, @description, @price); 
+                SELECT SCOPE_IDENTITY() AS Id;
+            `);
+        const dishId = result.recordset[0].Id;
+        res.json({ dishId, restaurantId, name, description, price });
     } catch (err) {
         res.status(500).json({ error: err });
     }
 });
 
-// Sửa món trong menu
-app.put("/restaurants/:restaurantId/menu/:menuItemId", async (req: Request, res: Response) => {
-    const { restaurantId, menuItemId } = req.params;
-    const { name, price } = req.body;
+app.put("/restaurants/:restaurantId/dishes/:dishId", async (req: Request, res: Response) => {
+    const { restaurantId, dishId } = req.params;
+    const { name, description, price } = req.body;
     try {
         await pool.request()
-            .input("id", sql.Int, menuItemId)
+            .input("id", sql.Int, dishId)
             .input("restaurantId", sql.Int, restaurantId)
             .input("name", sql.NVarChar, name)
+            .input("description", sql.NVarChar, description)
             .input("price", sql.Decimal(10, 2), price)
-            .query("UPDATE MenuItems SET Name = @name, Price = @price WHERE MenuItemId = @id AND RestaurantId = @restaurantId");
-        res.json({ menuItemId, restaurantId, name, price });
+            .query(`
+                UPDATE Dishes 
+                SET Name = @name, Description = @description, Price = @price 
+                WHERE Id = @id AND RestaurantId = @restaurantId
+            `);
+        res.json({ dishId, restaurantId, name, description, price });
     } catch (err) {
         res.status(500).json({ error: err });
     }
 });
 
-// Xóa món trong menu
-app.delete("/restaurants/:restaurantId/menu/:menuItemId", async (req: Request, res: Response) => {
-    const { restaurantId, menuItemId } = req.params;
+app.delete("/restaurants/:restaurantId/dishes/:dishId", async (req: Request, res: Response) => {
+    const { restaurantId, dishId } = req.params;
     try {
         await pool.request()
-            .input("id", sql.Int, menuItemId)
+            .input("id", sql.Int, dishId)
             .input("restaurantId", sql.Int, restaurantId)
-            .query("DELETE FROM MenuItems WHERE MenuItemId = @id AND RestaurantId = @restaurantId");
-        res.json({ message: `MenuItem ${menuItemId} deleted from restaurant ${restaurantId}.` });
+            .query("DELETE FROM Dishes WHERE Id = @id AND RestaurantId = @restaurantId");
+        res.json({ message: `Dish ${dishId} deleted from restaurant ${restaurantId}.` });
     } catch (err) {
         res.status(500).json({ error: err });
     }

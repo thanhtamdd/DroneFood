@@ -8,7 +8,7 @@ services:
       SA_PASSWORD: "DroneFood1"
       ACCEPT_EULA: "Y"
     ports:
-      - "1446:1433"
+      - "1446:1433" # chỉ để host Windows connect, container internal vẫn 1433
     networks:
       - dronefood-net
     restart: unless-stopped
@@ -28,9 +28,10 @@ services:
     environment:
       PORT: 3001
       DB_SERVER: sqlserver
+      DB_PORT: 1433
       DB_USER: sa
       DB_PASSWORD: DroneFood1
-      DB_NAME: DroneFoodDB
+      DB_NAME: UserServiceDB
       RABBITMQ_URL: amqp://rabbitmq
     ports:
       - "3001:3001"
@@ -46,9 +47,10 @@ services:
     environment:
       PORT: 3002
       DB_SERVER: sqlserver
+      DB_PORT: 1433
       DB_USER: sa
       DB_PASSWORD: DroneFood1
-      DB_NAME: DroneFoodDB
+      DB_NAME: RestaurantServiceDB
       RABBITMQ_URL: amqp://rabbitmq
     ports:
       - "3002:3002"
@@ -64,9 +66,10 @@ services:
     environment:
       PORT: 3003
       DB_SERVER: sqlserver
+      DB_PORT: 1433
       DB_USER: sa
       DB_PASSWORD: DroneFood1
-      DB_NAME: DroneFoodDB
+      DB_NAME: OrderServiceDB
       RABBITMQ_URL: amqp://rabbitmq
     ports:
       - "3003:3003"
@@ -82,9 +85,10 @@ services:
     environment:
       PORT: 3004
       DB_SERVER: sqlserver
+      DB_PORT: 1433
       DB_USER: sa
       DB_PASSWORD: DroneFood1
-      DB_NAME: DroneFoodDB
+      DB_NAME: PaymentServiceDB
       RABBITMQ_URL: amqp://rabbitmq
     ports:
       - "3004:3004"
@@ -100,9 +104,10 @@ services:
     environment:
       PORT: 3005
       DB_SERVER: sqlserver
+      DB_PORT: 1433
       DB_USER: sa
       DB_PASSWORD: DroneFood1
-      DB_NAME: DroneFoodDB
+      DB_NAME: DroneServiceDB
       RABBITMQ_URL: amqp://rabbitmq
     ports:
       - "3005:3005"
@@ -116,8 +121,17 @@ services:
   dispatch-service:
     build: ./dispatch-service
     environment:
+      PORT: 3006
+      DB_SERVER: sqlserver
+      DB_PORT: 1433
+      DB_USER: sa
+      DB_PASSWORD: DroneFood1
+      DB_NAME: DispatchServiceDB
       RABBITMQ_URL: amqp://rabbitmq
+    ports:
+      - "3006:3006"
     depends_on:
+      - sqlserver
       - rabbitmq
     networks:
       - dronefood-net
@@ -126,7 +140,10 @@ services:
   notification-service:
     build: ./notification-service
     environment:
+      PORT: 3007
       RABBITMQ_URL: amqp://rabbitmq
+    ports:
+      - "3007:3007"
     depends_on:
       - rabbitmq
     networks:

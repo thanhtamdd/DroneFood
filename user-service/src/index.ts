@@ -13,7 +13,7 @@ const pool = new sql.ConnectionPool({
     user: process.env.DB_USER!,
     password: process.env.DB_PASSWORD!,
     server: process.env.DB_SERVER!,
-    port: 1433,
+    port: parseInt(process.env.DB_PORT!) || 1433,
     database: process.env.DB_NAME!,
     options: { encrypt: false, trustServerCertificate: true },
 });
@@ -44,14 +44,20 @@ app.get("/users", async (req: Request, res: Response) => {
 
 // Thêm user mới
 app.post("/users", async (req: Request, res: Response) => {
-    const { name, email } = req.body;
+    const { username, email, passwordHash, role } = req.body;
     try {
         const result = await pool.request()
-            .input("name", sql.NVarChar, name)
+            .input("username", sql.NVarChar, username)
             .input("email", sql.NVarChar, email)
-            .query("INSERT INTO Users (Name, Email) VALUES (@name, @email); SELECT SCOPE_IDENTITY() AS UserId;");
-        const userId = result.recordset[0].UserId;
-        res.json({ userId, name, email });
+            .input("passwordHash", sql.NVarChar, passwordHash)
+            .input("role", sql.NVarChar, role || 'Customer')
+            .query(`
+                INSERT INTO Users (Username, Email, PasswordHash, Role) 
+                VALUES (@username, @email, @passwordHash, @role); 
+                SELECT SCOPE_IDENTITY() AS Id;
+            `);
+        const userId = result.recordset[0].Id;
+        res.json({ userId, username, email, role: role || 'Customer' });
     } catch (err) {
         res.status(500).json({ error: err });
     }
@@ -60,14 +66,20 @@ app.post("/users", async (req: Request, res: Response) => {
 // Sửa thông tin user
 app.put("/users/:id", async (req: Request, res: Response) => {
     const userId = req.params.id;
-    const { name, email } = req.body;
+    const { username, email, passwordHash, role } = req.body;
     try {
         await pool.request()
             .input("id", sql.Int, userId)
-            .input("name", sql.NVarChar, name)
+            .input("username", sql.NVarChar, username)
             .input("email", sql.NVarChar, email)
-            .query("UPDATE Users SET Name = @name, Email = @email WHERE UserId = @id");
-        res.json({ userId, name, email });
+            .input("passwordHash", sql.NVarChar, passwordHash)
+            .input("role", sql.NVarChar, role)
+            .query(`
+                UPDATE Users 
+                SET Username = @username, Email = @email, PasswordHash = @passwordHash, Role = @role
+                WHERE Id = @id
+            `);
+        res.json({ userId, username, email, role });
     } catch (err) {
         res.status(500).json({ error: err });
     }
@@ -79,7 +91,7 @@ app.delete("/users/:id", async (req: Request, res: Response) => {
     try {
         await pool.request()
             .input("id", sql.Int, userId)
-            .query("DELETE FROM Users WHERE UserId = @id");
+            .query("DELETE FROM Users WHERE Id = @id");
         res.json({ message: `User ${userId} deleted.` });
     } catch (err) {
         res.status(500).json({ error: err });

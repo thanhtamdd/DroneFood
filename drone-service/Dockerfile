@@ -11,7 +11,13 @@ COPY tsconfig.json ./
 COPY src ./src
 
 # Cài typescript và types cho dev
-RUN npm install --save-dev typescript @types/node @types/express @types/amqplib @types/dotenv
+RUN npm install --save-dev typescript \
+    @types/node \
+    @types/express \
+    @types/amqplib \
+    @types/dotenv \
+    @types/mssql
+
 
 # Build TS ra JS
 RUN npx tsc

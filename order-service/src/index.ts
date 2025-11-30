@@ -14,7 +14,7 @@ const pool = new sql.ConnectionPool({
     user: process.env.DB_USER!,
     password: process.env.DB_PASSWORD!,
     server: process.env.DB_SERVER!,
-    port: 1433,
+    port: parseInt(process.env.DB_PORT!) || 1433,
     database: process.env.DB_NAME!,
     options: { encrypt: false, trustServerCertificate: true },
 });
@@ -47,21 +47,27 @@ async function connectWithRetry(pool: sql.ConnectionPool, retries = 5) {
 
 // Tạo order + publish event
 app.post("/orders", async (req: Request, res: Response) => {
-    const { userId, restaurantId, totalPrice } = req.body;
+    const { userId, restaurantId, totalAmount } = req.body;
     try {
         const result = await pool.request()
             .input("userId", sql.Int, userId)
             .input("restaurantId", sql.Int, restaurantId)
-            .input("totalPrice", sql.Decimal(10, 2), totalPrice)
-            .query(`INSERT INTO Orders (UserId, RestaurantId, TotalPrice)
-                    OUTPUT INSERTED.OrderId
-                    VALUES (@userId, @restaurantId, @totalPrice)`);
-        const orderId = result.recordset[0].OrderId;
+            .input("totalAmount", sql.Decimal(10, 2), totalAmount)
+            .query(`
+                INSERT INTO Orders (UserId, RestaurantId, TotalAmount)
+                OUTPUT INSERTED.Id
+                VALUES (@userId, @restaurantId, @totalAmount)
+            `);
+        const orderId = result.recordset[0].Id;
 
         // Publish event cho các service khác
-        channel.publish("order_events", "", Buffer.from(JSON.stringify({ orderId, userId, restaurantId, totalPrice })));
+        channel.publish(
+            "order_events",
+            "",
+            Buffer.from(JSON.stringify({ orderId, userId, restaurantId, totalAmount }))
+        );
 
-        res.json({ orderId });
+        res.json({ orderId, userId, restaurantId, totalAmount });
     } catch (err) {
         res.status(500).json({ error: err });
     }
@@ -83,7 +89,7 @@ app.get("/orders/:id", async (req: Request, res: Response) => {
     try {
         const result = await pool.request()
             .input("id", sql.Int, orderId)
-            .query("SELECT * FROM Orders WHERE OrderId = @id");
+            .query("SELECT * FROM Orders WHERE Id = @id");
         res.json(result.recordset[0] || null);
     } catch (err) {
         res.status(500).json({ error: err });
@@ -93,13 +99,14 @@ app.get("/orders/:id", async (req: Request, res: Response) => {
 // Cập nhật order
 app.put("/orders/:id", async (req: Request, res: Response) => {
     const orderId = req.params.id;
-    const { totalPrice } = req.body;
+    const { totalAmount, status } = req.body;
     try {
         await pool.request()
             .input("id", sql.Int, orderId)
-            .input("totalPrice", sql.Decimal(10, 2), totalPrice)
-            .query("UPDATE Orders SET TotalPrice = @totalPrice WHERE OrderId = @id");
-        res.json({ orderId, totalPrice });
+            .input("totalAmount", sql.Decimal(10, 2), totalAmount)
+            .input("status", sql.NVarChar, status)
+            .query("UPDATE Orders SET TotalAmount = @totalAmount, Status = @status WHERE Id = @id");
+        res.json({ orderId, totalAmount, status });
     } catch (err) {
         res.status(500).json({ error: err });
     }
@@ -111,7 +118,7 @@ app.delete("/orders/:id", async (req: Request, res: Response) => {
     try {
         await pool.request()
             .input("id", sql.Int, orderId)
-            .query("DELETE FROM Orders WHERE OrderId = @id");
+            .query("DELETE FROM Orders WHERE Id = @id");
         res.json({ message: `Order ${orderId} deleted.` });
     } catch (err) {
         res.status(500).json({ error: err });
